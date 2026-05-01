@@ -3,24 +3,78 @@ import cv2
 import imutils
 from ultralytics import YOLO
 import numpy as np
-img = r"C:\Users\Yunus Emre\Desktop\python\köpek.png"
-model_path = "yolo11s-cls.pt"
-model = YOLO(model_path)
-results = model(img)
-class_dict = results[0].names
-probs = results[0].probs.data.tolist()
-print("sınıflar:", class_dict)
-print("olasılıklar:", probs)
-predicted_class_idx =np.argmax(probs)
-predicted_class = class_dict[predicted_class_idx]
-confidence = probs[predicted_class_idx]
-print("sonuç:", predicted_class)
-img = cv2.imread(img)
-font =cv2.FONT_HERSHEY_SIMPLEX
-text = f"{predicted_class} ({confidence:.2f})"
+import random 
+import time 
 
-cv2.putText(img, text, (15, 40), font, 1, (0, 0, 255), 2)
-cv2.imshow("Image", img)
-cv2.waitKey(0)
+model = YOLO("best.pt")
+cap = cv2.VideoCapture(0)
+skor={"oyuncu":0,"Bilgisayar":0}
+secenekler =["taş","kagit","makas"]
+son_oyun_zamani = 0 
+bekleme_suresi = 2
+
+def kim_kazanir(oyuncu, Bilgisayar):
+    if oyuncu == Bilgisayar:
+        return "Berabere"
+    kazanan_durumlar=[("taş","makas"), ("kagit","taş"), ("makas","kagit")]
+    if (oyuncu, Bilgisayar) in kazanan_durumlar:
+        skor["oyuncu"] += 1
+        return "Oyuncu Kazandı"
+    skor["Bilgisayar"] += 1
+    return "Kaybettin"
+Bilgisayar =None
+sonuc=None
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    frame =cv2.flip(frame,1)
+    results = model(frame)[0]
+
+    oyuncu_secimi=None
+    for result in results.boxes.data.tolist():
+        x1,y1,x2,y2,score, class_id = result
+        if score > 0.6:
+            x1,y1,x2,y2 = map(int, (x1,y1,x2,y2))
+            class_name = results.names[int(class_id).lower()]
+
+            if class_name in secenekler:
+                oyuncu_secimi = class_name
+                cv2.rectangle(frame, (x1,y1), (x2,y2), (0,255,0), 2)
+                cv2.putText(frame, class_name.upper(), (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+                break
+    
+    suanki_zaman = time.time()
+    if oyuncu_secimi and (suanki_zaman - son_oyun_zamani >bekleme_suresi):
+        Bilgisayar = random.choice(secenekler)
+        sonuc = kim_kazanir(oyuncu_secimi, Bilgisayar)
+        son_oyun_zamani = suanki_zaman
+
+    if Bilgisayar and (suanki_zaman - son_oyun_zamani <= bekleme_suresi):
+        cv2.putText(frame, f"Bilgisayar: {Bilgisayar}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,0), 2)
+        cv2.putText(frame, f"Sonuc: {sonuc}", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
+
+        kalan = bekleme_suresi - (suanki_zaman - son_oyun_zamani)
+        cv2.putText(frame,f"Yeni oyun : {kalan:.1f}.sn", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,255), 2)
+    
+    else :
+      cv2.putText(frame,"Elinizi Gösterin!",(10,50),cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
+      
+    cv2.putText(frame,f"Skor -Sen : {skor["oyuncu"]} PC :{skor["Bilgisayar"]}",10,frame.shape[0]-20, cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
+
+    cv2.imshow("Taş-Kagit-Makas", frame)
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord('q'):
+        break
+    elif key == ord('r'):
+        skor={"oyuncu":0,"Bilgisayar":0}
+        
+cap.release()
 cv2.destroyAllWindows()
+
+
+
+
 
